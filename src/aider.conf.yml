@@ -1,0 +1,5 @@
+# Configuração padrão do aider — instalada pelo kdu9-aider
+# Documentação: https://aider.chat/docs/config/aider_conf.html
+
+model: gemini/gemini-3.6-flash
+auto-commits: false

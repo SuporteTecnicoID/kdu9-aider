@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Desinstalar Aider
+GenericName=Uninstall Aider
+GenericName[pt_BR]=Remover o Aider
+Comment=Uninstalls Aider with a single click
+Comment[pt_BR]=Remove o Aider com 1 clique (filosofia KDu9)
+Exec=bash -c "d=\"\$(dirname \"%k\")\"; if [ ! -f \"\$d/uninstall.sh\" ]; then kdialog --error \"Execute este arquivo a partir da pasta extraída do kdu9-aider.\"; exit 1; fi; exec konsole --hold -e bash \"\$d/uninstall.sh\""
+Terminal=false
+Icon=system-software-uninstall
+Categories=System;
+Keywords=desinstalar;uninstall;remover;aider;kdu9;
+StartupNotify=false

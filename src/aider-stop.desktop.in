@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Aider — Parar servidor
+GenericName=Stop Aider
+GenericName[pt_BR]=Encerrar o Aider
+Comment=Shuts down all background aider sessions
+Comment[pt_BR]=Encerra todas as sessões do aider em segundo plano
+Exec=@HOME@/.local/bin/aider-stop
+Path=@HOME@
+Terminal=false
+Icon=process-stop
+Categories=Development;
+Keywords=aider;parar;stop;encerrar;
+StartupNotify=false

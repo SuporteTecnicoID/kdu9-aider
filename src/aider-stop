@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# kdu9-aider — Encerra TODAS as sessões do aider rodando em segundo plano.
+
+CACHE_DIR="$HOME/.cache/aider-sessions"
+
+pkill -f "bin/aider --browser" 2>/dev/null
+pkill -f "aider/gui.py" 2>/dev/null
+sleep 1
+
+if pgrep -f "bin/aider --browser" >/dev/null 2>&1; then
+    kdialog --title "Aider" --error "Não consegui encerrar todas as sessões. Verifique no monitor de tarefas (aider/streamlit)." 2>/dev/null
+    exit 1
+fi
+
+rm -f "$CACHE_DIR"/85* 2>/dev/null
+kdialog --title "Aider" --passivenotification "Todas as sessões do aider foram encerradas." 2>/dev/null
+exit 0

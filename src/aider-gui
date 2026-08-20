@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# kdu9-aider — Lançador da interface do aider no navegador, sem janela de terminal.
+# Suporta várias sessões independentes ao mesmo tempo (portas 8501-8508),
+# cada uma com sua pasta de projeto. Ao clicar com sessões em execução,
+# aparece um menu para reabrir a aba de uma delas ou criar uma nova.
+# No primeiro uso, pede a chave da API do Gemini (Google AI Studio).
+
+AIDER="${KDU9_AIDER_BIN:-}"
+if [ -z "$AIDER" ]; then
+    # prioridade: instalação compartilhada do sistema (padrão KDu9: /opt/pipx,
+    # fora do home para não inflar o skel) → venv do usuário
+    for c in "${KDU9_AIDER_SHARED_ROOT:-/opt/pipx}/bin/aider" "${KDU9_AIDER_SHARED_ROOT:-/opt/pipx}"/venvs/*/bin/aider; do
+        if [ -x "$c" ]; then AIDER="$c"; break; fi
+    done
+fi
+[ -n "$AIDER" ] || AIDER="$HOME/.aider-env/bin/aider"
+
+CACHE_DIR="$HOME/.cache/aider-sessions"
+LASTDIR_FILE="$HOME/.cache/aider-gui.lastdir"
+ENV_FILE="$HOME/.env"
+MAX_SESS=8
+BASE_PORT=8501
+
+mkdir -p "$CACHE_DIR"
+
+healthy() { curl -s -o /dev/null --max-time 1 "http://localhost:$1/_stcore/health"; }
+
+# garante que existe uma chave do Gemini configurada (pergunta no 1º uso)
+ask_key() {
+    grep -qE '^GEMINI_API_KEY=..+' "$ENV_FILE" 2>/dev/null && return 0
+    key=$(kdialog --title "Aider — Chave do Gemini" \
+        --inputbox "Primeiro uso: cole aqui sua chave da API do Google AI Studio.\n\nPegue uma grátis em: aistudio.google.com/apikey" 2>/dev/null)
+    [ -z "$key" ] && return 1
+    KEY="$key" python3 - <<'PY'
+import os
+p = os.path.expanduser('~/.env')
+key = os.environ['KEY'].strip().replace(' ', '')
+lines = open(p).read().splitlines() if os.path.exists(p) else []
+out, done = [], False
+for l in lines:
+    if l.startswith('GEMINI_API_KEY='):
+        out.append('GEMINI_API_KEY=' + key); done = True
+    else:
+        out.append(l)
+if not done:
+    out.append('GEMINI_API_KEY=' + key)
+open(p, 'w').write('\n'.join(out) + '\n')
+os.chmod(p, 0o600)
+PY
+}
+
+# imprime "porta pasta" das sessões registradas que continuam vivas (limpa as mortas)
+live_sessions() {
+    local f port dir
+    for f in "$CACHE_DIR"/85*; do
+        [ -e "$f" ] || continue
+        port=${f##*/}
+        dir=$(<"$f")
+        if healthy "$port"; then
+            printf '%s %s\n' "$port" "$dir"
+        else
+            rm -f "$f" "$f.log"
+        fi
+    done
+}
+
+# primeira porta livre na faixa
+free_port() {
+    local i port
+    for ((i = 0; i < MAX_SESS; i++)); do
+        port=$((BASE_PORT + i))
+        healthy "$port" || { echo "$port"; return; }
+    done
+}
+
+# ---- sessões em execução ----
+mapfile -t sess < <(live_sessions)
+
+if [ ${#sess[@]} -gt 0 ]; then
+    args=()
+    for s in "${sess[@]}"; do
+        port=${s%% *}; dir=${s#* }
+        args+=("$port" "$dir")
+    done
+    choice=$(kdialog --title "Aider" --menu "Sessões em execução — reabrir ou criar:" "${args[@]}" nova "Nova sessão…")
+    [ -z "$choice" ] && exit 0
+    if [ "$choice" != "nova" ]; then
+        xdg-open "http://localhost:$choice" >/dev/null 2>&1 &
+        exit 0
+    fi
+fi
+
+# ---- nova sessão ----
+ask_key || exit 0
+
+start_dir="$HOME"
+[ -f "$LASTDIR_FILE" ] && start_dir=$(<"$LASTDIR_FILE")
+[ -d "$start_dir" ] || start_dir="$HOME"
+
+dir=$(kdialog --title "Aider — Escolha a pasta do projeto" --getexistingdirectory "$start_dir")
+[ -z "$dir" ] && exit 0
+
+if [ ! -d "$dir/.git" ]; then
+    kdialog --title "Aider" --yesno "A pasta escolhida não é um repositório git (necessário para o aider).\n\nInicializar o git em:\n$dir ?" || exit 0
+    git init -q "$dir" || { kdialog --title "Aider" --error "Falha ao inicializar o git na pasta."; exit 1; }
+    # prepara os arquivos para o git enxergá-los (repositório novo não lista nada)
+    git -C "$dir" add -A 2>/dev/null
+fi
+
+port=$(free_port)
+if [ -z "$port" ]; then
+    kdialog --title "Aider" --error "Já existem $MAX_SESS sessões do aider rodando. Encerre alguma com o ícone 'Aider — Parar servidor'."
+    exit 1
+fi
+
+printf '%s' "$dir" > "$LASTDIR_FILE"
+printf '%s' "$dir" > "$CACHE_DIR/$port"
+LOG_FILE="$CACHE_DIR/$port.log"
+
+# sobe o servidor em segundo plano, em porta própria e sem abrir navegador
+# (a aba é aberta pelo próprio lançador quando o servidor responde)
+cd "$dir" || exit 1
+setsid nohup env "STREAMLIT_SERVER_PORT=$port" STREAMLIT_SERVER_HEADLESS=true \
+    "$AIDER" --browser >"$LOG_FILE" 2>&1 </dev/null &
+disown
+
+for i in $(seq 1 40); do
+    sleep 1
+    if healthy "$port"; then
+        xdg-open "http://localhost:$port" >/dev/null 2>&1 &
+        exit 0
+    fi
+done
+
+rm -f "$CACHE_DIR/$port" "$LOG_FILE"
+kdialog --title "Aider" --error "O servidor do aider não subiu.\nVeja o log em:\n$LOG_FILE"
+exit 1

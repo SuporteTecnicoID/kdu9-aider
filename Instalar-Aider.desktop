@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Instalar Aider
+GenericName=Install Aider
+GenericName[pt_BR]=Instalar o Aider
+Comment=Installs or updates Aider with a single click
+Comment[pt_BR]=Instala ou atualiza o Aider com 1 clique (filosofia KDu9)
+Exec=bash -c "d=\"\$(dirname \"%k\")\"; if [ ! -f \"\$d/instalar.sh\" ]; then kdialog --error \"Execute este arquivo a partir da pasta extraída do kdu9-aider.\"; exit 1; fi; exec bash \"\$d/instalar.sh\""
+Terminal=false
+Icon=system-software-install
+Categories=System;
+Keywords=instalar;install;aider;kdu9;
+StartupNotify=false

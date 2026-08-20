@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Aider
+GenericName=AI Pair Programmer
+GenericName[pt_BR]=Programação em par com IA
+Comment=AI pair programming assistant (Gemini)
+Comment[pt_BR]=Assistente de programação com IA (Gemini)
+Exec=@HOME@/.local/bin/aider-gui
+Path=@HOME@
+Terminal=false
+Icon=@HOME@/.local/share/icons/aider.png
+Categories=Development;
+Keywords=ai;ia;chat;code;codigo;git;llm;gemini;programacao;
+StartupNotify=true
