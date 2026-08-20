@@ -77,6 +77,37 @@ KDU9_AIDER_BIN=...                 # força o binário do aider
 A desinstalação nunca remove o ambiente compartilhado (ele pode servir a
 outros usuários) — para isso: `sudo rm -rf /opt/pipx`.
 
+## Modo --skel (build da distro no laboratório)
+
+Formaliza o fluxo usado no laboratório KDu9: excluir os arquivos do aider
+do sync do `/etc/skel` e dar **acesso global** — foi o que, junto com
+outras mudanças, baixou a ISO de 6.4 GB para 5.4 GB. Durante o build da
+distro (como root):
+
+```bash
+bash install.sh --skel /etc/skel
+```
+
+Layout resultante:
+
+| Caminho | O quê |
+|---|---|
+| `/opt/pipx` | ambiente do aider (~1 GB, global, fora do skel) |
+| `/usr/local/bin/aider-gui`, `aider-stop` | lançadores (valem para todos) |
+| `/usr/share/pixmaps/aider.png` | ícone global |
+| `/usr/share/applications/aider*.desktop` | menu para todos os usuários |
+| `/etc/skel/Desktop/aider*.desktop` | atalhos prontos para novos usuários |
+| `/etc/skel/.aider.conf.yml`, `.env` | configs iniciais dos novos usuários |
+
+Os lançadores usam caminhos fixos (idênticos para qualquer usuário — sem
+substituição de home). Novo usuário faz login e os ícones já estão lá; no
+primeiro clique o Aider pede a chave do Gemini. Nada dos ~1 GB entra no
+home de ninguém.
+
+Destinos personalizáveis para testes: `KDU9_GLOBAL_BIN`,
+`KDU9_GLOBAL_APPS`, `KDU9_GLOBAL_PIXMAPS` (padrões `/usr/local/bin`,
+`/usr/share/applications`, `/usr/share/pixmaps`).
+
 ## Primeiro uso
 
 1. Clique no ícone **Aider**;
@@ -118,6 +149,7 @@ kdu9-aider/
 
 | Versão | Data       | Novidades |
 |--------|------------|-----------|
+| 1.1.0  | 2026-08-20 | Modo `--skel` para builds da distro (global em /opt/pipx + lançadores de caminho fixo + esqueleto pronto). |
 | 1.0.0  | 2026-08-20 | Versão inicial: instalação por clique, sessões múltiplas, pedido de chave no 1º uso. |
 
 ## Downloads

@@ -4,7 +4,8 @@
 #  Aider (IA de programação em par) empacotado para GNU/Linux KDu9
 #  Funciona em qualquer distro GNU/Linux com KDE e Python 3.10+
 #
-#  Uso:  bash install.sh          (instala ou atualiza)
+#  Uso:  bash install.sh          (instala ou atualiza para o usuário)
+#        bash install.sh --skel /etc/skel   (build da distro: global + skel)
 #        bash uninstall.sh        (remove)
 #  Reexecutar é seguro: atualiza arquivos sem tocar nas configs.
 # =============================================================
@@ -16,6 +17,12 @@ SRC="$(cd "$(dirname "$0")" && pwd)/src"
 VENV_DIR="${KDU9_AIDER_VENV:-$HOME/.aider-env}"
 LOG_DIR="$HOME/.cache"
 LOG="$LOG_DIR/kdu9-aider-install.log"
+
+# modo --skel: prepara instalação global + arquivos-base do esqueleto
+SKEL_DIR=""
+if [ "${1:-}" = "--skel" ]; then
+    SKEL_DIR="${2:-/etc/skel}"
+fi
 
 say()  { printf '%b\n' "$*"; }
 err()  { printf '\033[31mERRO:\033[0m %s\n' "$*" >&2; }
@@ -200,8 +207,80 @@ summary() {
     say ""
 }
 
+# ---------- modo skel (build da distro: tudo global + esqueleto) ----------
+# Layout resultante:
+#   /opt/pipx (ou $SHARED_ROOT)               — ambiente do aider (~1 GB, global)
+#   /usr/local/bin/aider-gui, aider-stop      — lançadores (valem p/ todos)
+#   /usr/share/pixmaps/aider.png              — ícone global
+#   /usr/share/applications/aider*.desktop    — menu para todos os usuários
+#   $SKEL_DIR/Desktop/aider*.desktop          — atalhos dos novos usuários
+#   $SKEL_DIR/.aider.conf.yml, .env           — configs iniciais dos novos usuários
+# Os lançadores usam caminhos fixos — idênticos para qualquer usuário.
+skel_mode() {
+    local gbin="${KDU9_GLOBAL_BIN:-/usr/local/bin}"
+    local gapps="${KDU9_GLOBAL_APPS:-/usr/share/applications}"
+    local gpix="${KDU9_GLOBAL_PIXMAPS:-/usr/share/pixmaps}"
+
+    if [ "$(id -u)" -ne 0 ]; then
+        case "$gbin$gapps$gpix$SKEL_DIR" in
+            /usr/*|/opt/*|/etc/*)
+                err "Modo --skel em destinos do sistema exige root (rode no build da distro ou com sudo)."
+                exit 1
+                ;;
+        esac
+    fi
+
+    mkdir -p "$gbin" "$gapps" "$gpix" "$SKEL_DIR/Desktop" \
+        || { err "Falha ao criar pastas de destino do modo --skel."; exit 1; }
+
+    # scripts globais e ícone (os scripts resolvem $HOME em tempo de execução)
+    install -m 755 "$SRC/aider-gui"  "$gbin/aider-gui"
+    install -m 755 "$SRC/aider-stop" "$gbin/aider-stop"
+    install -m 644 "$SRC/aider.png"  "$gpix/aider.png"
+    ok "Lançadores globais em $gbin e ícone em $gpix."
+
+    # menu do sistema: caminhos fixos, iguais para todos os usuários
+    sed -e "s|^Exec=.*|Exec=$gbin/aider-gui|" \
+        -e "s|^Icon=.*|Icon=aider|" -e "/^Path=/d" \
+        "$SRC/aider.desktop.in" > "$gapps/aider.desktop"
+    sed -e "s|^Exec=.*|Exec=$gbin/aider-stop|" \
+        -e "s|^Icon=.*|Icon=process-stop|" -e "/^Path=/d" \
+        "$SRC/aider-stop.desktop.in" > "$gapps/aider-stop.desktop"
+    chmod 644 "$gapps/aider.desktop" "$gapps/aider-stop.desktop"
+    ok "Lançadores do menu em $gapps (todos os usuários)."
+
+    # esqueleto: atalho na área de trabalho + configs iniciais de novo usuário
+    cp "$gapps/aider.desktop" "$gapps/aider-stop.desktop" "$SKEL_DIR/Desktop/"
+    chmod 755 "$SKEL_DIR/Desktop/aider.desktop" "$SKEL_DIR/Desktop/aider-stop.desktop"
+    [ -f "$SKEL_DIR/.aider.conf.yml" ] || install -m 644 "$SRC/aider.conf.yml" "$SKEL_DIR/.aider.conf.yml"
+    [ -f "$SKEL_DIR/.env" ] || install -m 644 "$SRC/env.template" "$SKEL_DIR/.env"
+    ok "Esqueleto preparado em $SKEL_DIR (Desktop + configs iniciais)."
+
+    update-desktop-database "$gapps" >/dev/null 2>&1 || true
+    kbuildsycoca6 >/dev/null 2>&1 || kbuildsycoca5 >/dev/null 2>&1 || true
+
+    say ""
+    local env_show="$VENV_DIR"
+    case "$AIDER_BIN" in "$SHARED_ROOT"*) env_show="$SHARED_ROOT" ;; esac
+    say "==================================================="
+    say " Modo skel concluído (build da distro)."
+    say "==================================================="
+    say " Ambientes:  $env_show (global)"
+    say " Scripts:    $gbin/aider-gui, aider-stop"
+    say " Menu:       $gapps (todos os usuários)"
+    say " Esqueleto:  $SKEL_DIR (Desktop e configs p/ novos usuários)"
+    say ""
+    say " Novo usuário ganha os ícones prontos; no 1º uso o Aider pede"
+    say " a chave do Gemini. Nada do aider (~1 GB) vai para o home."
+    say ""
+}
+
 banner
 check_deps
 install_venv
-install_files
-summary
+if [ -n "$SKEL_DIR" ]; then
+    skel_mode
+else
+    install_files
+    summary
+fi
