@@ -162,6 +162,17 @@ kdu9-aider/
 | 1.1.0  | 2026-08-20 | Modo `--skel` para builds da distro (global em /opt/pipx + lançadores de caminho fixo + esqueleto pronto). |
 | 1.0.0  | 2026-08-20 | Versão inicial: instalação por clique, sessões múltiplas, pedido de chave no 1º uso. |
 
+## Capturas de tela
+
+Menu de sessões ao clicar no ícone Aider — reabrir, criar nova ou encerrar
+(órfãs aparecem para reabrir ou encerrar também):
+
+![Menu de sessões do Aider](docs/screens/kdu9-menu-sessoes.png)
+
+Encerramento seletivo — você marca quais sessões encerrar:
+
+![Encerrar sessões específicas](docs/screens/kdu9-encerrar-sessoes.png)
+
 ## Downloads
 
 - SourceForge: <https://sourceforge.net/projects/kdu9-aider/files/> (`.zip` e `.tar.gz`, com espelhamento global)
