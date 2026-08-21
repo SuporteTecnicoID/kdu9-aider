@@ -181,7 +181,7 @@ Encerramento seletivo — você marca quais sessões encerrar:
 ## ☕ Apoie o projeto
 
 O **Projeto Linux KDu (KDu9)** é desenvolvido e mantido pelo
-**Lab's & Tecnologia I.A.** — software livre e gratuito, feito de madrugada,
+**P.L.K. — Lab's & Tecnologia** — software livre e gratuito, feito de madrugada,
 para o mundo. Se ele ajudar você, pode retribuir:
 
 - **Pix (Brasil)** — escaneie o QR code abaixo (chave aleatória/EVP,
@@ -194,8 +194,8 @@ para o mundo. Se ele ajudar você, pode retribuir:
 
 ### Support the project
 
-KDu9 is free and open source software, maintained by **Lab's & Tecnologia
-I.A.** If it helps you, consider supporting via Pix (QR code above), Ko-fi or
+KDu9 is free and open source software, maintained by **P.L.K. — Lab's &
+Tecnologia**. If it helps you, consider supporting via Pix (QR code above), Ko-fi or
 GitHub Sponsors.
 
 ## Créditos e licenças
