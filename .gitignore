@@ -1,2 +1,4 @@
 dist/
 *.log
+
+.aider.key
