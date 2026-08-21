@@ -164,8 +164,8 @@ kdu9-aider/
 
 ## Downloads
 
-- GitHub: (preencher após publicar)
-- SourceForge: (preencher após publicar)
+- SourceForge: <https://sourceforge.net/projects/kdu9-aider/files/> (`.zip` e `.tar.gz`, com espelhamento global)
+- GitHub: <https://github.com/SuporteTecnicoID/kdu9-aider> (código-fonte)
 
 ## ☕ Apoie o projeto
 
