@@ -36,8 +36,13 @@ healthy() { curl -s -o /dev/null --max-time 1 "http://localhost:$1/_stcore/healt
 # histórico nem abas mortas de sessões antigas e evita cache velho do
 # Streamlit depois de atualizações. Navegador desconhecido → xdg-open.
 abrir_gui() {
-    local url="$1"
-    case "$(xdg-settings get default-webbrowser 2>/dev/null)" in
+    local url="$1" desk
+    # xdg-mime é o método confiável no KDE; minúsculas para o case bater
+    # (ex.: "userapp-Firefox-XXXX.desktop")
+    desk=$(xdg-mime query default x-scheme-handler/https 2>/dev/null)
+    [ -z "$desk" ] && desk=$(xdg-mime query default x-scheme-handler/http 2>/dev/null)
+    desk=${desk,,}
+    case "$desk" in
         *firefox*)
             setsid firefox --private-window "$url" >/dev/null 2>&1 & ;;
         *chromium*)

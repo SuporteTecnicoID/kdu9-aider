@@ -157,6 +157,7 @@ kdu9-aider/
 
 | Versão | Data       | Novidades |
 |--------|------------|-----------|
+| 1.2.1  | 2026-08-21 | Correção da janela privativa: detecção via `xdg-mime` (o `xdg-settings` não funciona em todos os KDEs) com comparação em minúsculas. |
 | 1.2.0  | 2026-08-21 | Modo navegador garantido também em instalações reusadas (`ensure_browser`); layout pipx `/opt/pipx/venvs/aider-chat` + link `/usr/local/bin/aider`; janela privativa do navegador; encerramento seletivo de sessões no menu; diagnóstico real de falhas (lê o log e diz o que fazer); cache do pip limpo após instalar. |
 | 1.1.0  | 2026-08-20 | Modo `--skel` para builds da distro (global em /opt/pipx + lançadores de caminho fixo + esqueleto pronto). |
 | 1.0.0  | 2026-08-20 | Versão inicial: instalação por clique, sessões múltiplas, pedido de chave no 1º uso. |
