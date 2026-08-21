@@ -187,7 +187,7 @@ para o mundo. Se ele ajudar você, pode retribuir:
 - **Pix (Brasil)** — escaneie o QR code abaixo (chave aleatória/EVP,
   a chave pessoal fica protegida):
 
-  ![QR Code Pix — Projeto Linux KDu](docs/apoie-pix-qrcode.jpg)
+  ![Apoie via Pix — Projeto Linux KDu](docs/apoie-pix-banner.png)
 
 - **Ko-fi / PayPal** (internacional): *(inserir link)*
 - **GitHub Sponsors**: *(inserir link)*
