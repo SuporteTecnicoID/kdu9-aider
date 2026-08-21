@@ -121,7 +121,7 @@ Destinos personalizáveis para testes: `KDU9_GLOBAL_BIN`,
    confirme);
 3. Escolha a pasta do projeto e converse! A interface abre no navegador.
 
-O lançador usa `gemini/gemini-3.6-flash` com `--map-tokens 1024` — mapa do
+O lançador usa `gemini/gemini-3.7-flash` com `--map-tokens 1024` — mapa do
 repositório enxuto, economiza a cota da conta grátis. Para trocar, edite a
 linha do `--model` em `src/aider-gui` e reinstale.
 

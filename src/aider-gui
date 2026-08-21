@@ -245,7 +245,7 @@ if [ -z "$AIDER" ]; then
     exit 1
 fi
 
-setsid nohup "$AIDER" --browser --model gemini/gemini-3.6-flash --map-tokens 1024 >"$LOG_FILE" 2>&1 </dev/null &
+setsid nohup "$AIDER" --browser --model gemini/gemini-3.7-flash --map-tokens 1024 >"$LOG_FILE" 2>&1 </dev/null &
 AIDER_PID=$!
 disown
 
