@@ -30,6 +30,17 @@
     }
     .links a:hover { background: #39404e; }
     small { display: block; margin-top: 1rem; color: #6b7280; }
+
+    /* modo impressão: fundo branco, texto escuro (impressoras não pintam fundo) */
+    @media print {
+        body { background: #fff; color: #111; }
+        .card { background: #fff; border: 2px solid #111; }
+        h1, h1 span { color: #111; }
+        .lab { color: #1a4d8f; }
+        p { color: #333; }
+        img { border: 3px solid #111; }
+        small { color: #555; }
+    }
 </style>
 </head>
 <body>
