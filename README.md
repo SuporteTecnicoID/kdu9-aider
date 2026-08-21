@@ -167,6 +167,26 @@ kdu9-aider/
 - GitHub: (preencher após publicar)
 - SourceForge: (preencher após publicar)
 
+## ☕ Apoie o projeto
+
+O **Projeto Linux KDu (KDu9)** é desenvolvido e mantido pelo
+**Lab's & Tecnologia I.A.** — software livre e gratuito, feito de madrugada,
+para o mundo. Se ele ajudar você, pode retribuir:
+
+- **Pix (Brasil)** — escaneie o QR code abaixo (chave aleatória/EVP,
+  a chave pessoal fica protegida):
+
+  ![QR Code Pix — Projeto Linux KDu](docs/apoie-pix-qrcode.jpg)
+
+- **Ko-fi / PayPal** (internacional): *(inserir link)*
+- **GitHub Sponsors**: *(inserir link)*
+
+### Support the project
+
+KDu9 is free and open source software, maintained by **Lab's & Tecnologia
+I.A.** If it helps you, consider supporting via Pix (QR code above), Ko-fi or
+GitHub Sponsors.
+
 ## Créditos e licenças
 
 - Este empacotamento (scripts de instalação/lançadores): licença MIT
