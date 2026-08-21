@@ -1,76 +1,127 @@
 #!/usr/bin/env bash
-# kdu9-aider — Lançador da interface do aider no navegador, sem janela de terminal.
-# Suporta várias sessões independentes ao mesmo tempo (portas 8501-8508),
-# cada uma com sua pasta de projeto. Ao clicar com sessões em execução,
-# aparece um menu para reabrir a aba de uma delas ou criar uma nova.
-# No primeiro uso, pede a chave da API do Gemini (Google AI Studio).
+# Lançador da interface do aider no navegador, sem janela de terminal.
+# COMPATÍVEL COM NOVOS USUÁRIOS E MULTI-SESSÕES DO KDu9.
 
-AIDER="${KDU9_AIDER_BIN:-}"
-if [ -z "$AIDER" ]; then
-    # prioridade: instalação compartilhada do sistema (padrão KDu9: /opt/pipx,
-    # fora do home para não inflar o skel) → venv do usuário
-    for c in "${KDU9_AIDER_SHARED_ROOT:-/opt/pipx}/bin/aider" "${KDU9_AIDER_SHARED_ROOT:-/opt/pipx}"/venvs/*/bin/aider; do
-        if [ -x "$c" ]; then AIDER="$c"; break; fi
-    done
+# [KDu9 DETECÇÃO AUTOMÁTICA DO EXECUTÁVEL]
+# Procura o Aider no sistema para funcionar com qualquer novo usuário da ISO
+if [ -n "${KDU9_AIDER_BIN:-}" ]; then
+    AIDER="$KDU9_AIDER_BIN"
+elif [ -x "/usr/local/bin/aider" ]; then
+    AIDER="/usr/local/bin/aider"
+elif [ -x "/opt/pipx/venvs/aider-chat/bin/aider" ]; then
+    AIDER="/opt/pipx/venvs/aider-chat/bin/aider"
+elif [ -x "/opt/pipx/bin/aider" ]; then
+    AIDER="/opt/pipx/bin/aider"
+elif [ -x "$HOME/.local/bin/aider" ]; then
+    AIDER="$HOME/.local/bin/aider"
+elif [ -x "$HOME/.aider-env/bin/aider" ]; then
+    AIDER="$HOME/.aider-env/bin/aider"
+else
+    AIDER=$(which aider 2>/dev/null)
 fi
-[ -n "$AIDER" ] || AIDER="$HOME/.aider-env/bin/aider"
 
 CACHE_DIR="$HOME/.cache/aider-sessions"
 LASTDIR_FILE="$HOME/.cache/aider-gui.lastdir"
-ENV_FILE="$HOME/.env"
 MAX_SESS=8
 BASE_PORT=8501
 
 mkdir -p "$CACHE_DIR"
 
+# ---- BUSCA E VALIDAÇÃO DA CHAVE POR PROJETO ----
+# A chave é lida do arquivo local do projeto mais adiante e exportada na inicialização
+
 healthy() { curl -s -o /dev/null --max-time 1 "http://localhost:$1/_stcore/health"; }
 
-# garante que existe uma chave do Gemini configurada (pergunta no 1º uso)
-ask_key() {
-    grep -qE '^GEMINI_API_KEY=..+' "$ENV_FILE" 2>/dev/null && return 0
-    key=$(kdialog --title "Aider — Chave do Gemini" \
-        --inputbox "Primeiro uso: cole aqui sua chave da API do Google AI Studio.\n\nPegue uma grátis em: aistudio.google.com/apikey" 2>/dev/null)
-    [ -z "$key" ] && return 1
-    KEY="$key" python3 - <<'PY'
-import os
-p = os.path.expanduser('~/.env')
-key = os.environ['KEY'].strip().replace(' ', '')
-lines = open(p).read().splitlines() if os.path.exists(p) else []
-out, done = [], False
-for l in lines:
-    if l.startswith('GEMINI_API_KEY='):
-        out.append('GEMINI_API_KEY=' + key); done = True
-    else:
-        out.append(l)
-if not done:
-    out.append('GEMINI_API_KEY=' + key)
-open(p, 'w').write('\n'.join(out) + '\n')
-os.chmod(p, 0o600)
-PY
+# Abre a interface numa janela privativa do navegador padrão: não guarda
+# histórico nem abas mortas de sessões antigas e evita cache velho do
+# Streamlit depois de atualizações. Navegador desconhecido → xdg-open.
+abrir_gui() {
+    local url="$1"
+    case "$(xdg-settings get default-webbrowser 2>/dev/null)" in
+        *firefox*)
+            setsid firefox --private-window "$url" >/dev/null 2>&1 & ;;
+        *chromium*)
+            if command -v chromium >/dev/null 2>&1; then
+                setsid chromium --incognito --new-window "$url" >/dev/null 2>&1 &
+            else
+                setsid chromium-browser --incognito --new-window "$url" >/dev/null 2>&1 &
+            fi ;;
+        *chrome*)
+            setsid google-chrome --incognito --new-window "$url" >/dev/null 2>&1 & ;;
+        *)
+            xdg-open "$url" >/dev/null 2>&1 & ;;
+    esac
 }
 
-# imprime "porta pasta" das sessões registradas que continuam vivas (limpa as mortas)
 live_sessions() {
-    local f port dir
-    for f in "$CACHE_DIR"/85*; do
-        [ -e "$f" ] || continue
-        port=${f##*/}
-        dir=$(<"$f")
+    local i port f pid
+    local -A vistas
+    for ((i = 0; i < MAX_SESS; i++)); do
+        port=$((BASE_PORT + i))
+        f="$CACHE_DIR/$port"
+        [ -f "$f" ] || continue
         if healthy "$port"; then
-            printf '%s %s\n' "$port" "$dir"
+            printf '%s %s\n' "$port" "$(<"$f")"
+            vistas[$port]=1
         else
             rm -f "$f" "$f.log"
         fi
     done
+    # órfãs: servidor aider ativo sem registro no cache (ex.: início que
+    # demorou além da espera) — entram no menu para reabrir ou encerrar
+    for ((i = 0; i < MAX_SESS; i++)); do
+        port=$((BASE_PORT + i))
+        [ -n "${vistas[$port]}" ] && continue
+        pid=$(ss -tlnpH "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)
+        [ -z "$pid" ] && continue
+        grep -qa aider "/proc/$pid/cmdline" 2>/dev/null || continue
+        printf '%s %s\n' "$port" "(órfã)"
+    done
 }
 
-# primeira porta livre na faixa
 free_port() {
     local i port
     for ((i = 0; i < MAX_SESS; i++)); do
         port=$((BASE_PORT + i))
         healthy "$port" || { echo "$port"; return; }
     done
+}
+
+# ---- encerramento opcional: o usuário marca quais sessões quer encerrar ----
+encerrar_sessoes() {
+    local args=() s port dir pid tag escolha killed="" failed=""
+    local -A pid_of
+    for s in "${sess[@]}"; do
+        port=${s%% *}; dir=${s#* }
+        pid=$(ss -tlnpH "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)
+        [ -z "$pid" ] && continue
+        args+=("$port" "$port — $dir" off)
+        pid_of[$port]=$pid
+    done
+    [ ${#args[@]} -eq 0 ] && return 0
+
+    escolha=$(kdialog --title "Aider — Encerrar sessões" --checklist "Marque as sessões que deseja encerrar:" "${args[@]}" 2>/dev/null)
+    [ -z "$escolha" ] && return 0
+
+    for tag in $escolha; do
+        port=${tag//\"/}
+        kill -- -"${pid_of[$port]}" 2>/dev/null
+        kill "${pid_of[$port]}" 2>/dev/null
+        rm -f "$CACHE_DIR/$port" "$CACHE_DIR/$port.log"
+        killed="$killed $port"
+    done
+    sleep 1
+
+    for tag in $escolha; do
+        port=${tag//\"/}
+        ss -tlnH "sport = :$port" 2>/dev/null | grep -q . && failed="$failed $port"
+    done
+    if [ -n "$failed" ]; then
+        kdialog --title "Aider" --error "Não consegui encerrar:$failed
+Verifique no monitor de tarefas (aider/streamlit)." 2>/dev/null
+        return 1
+    fi
+    kdialog --title "Aider" --passivenotification "Sessões encerradas:$killed" 2>/dev/null
 }
 
 # ---- sessões em execução ----
@@ -82,17 +133,19 @@ if [ ${#sess[@]} -gt 0 ]; then
         port=${s%% *}; dir=${s#* }
         args+=("$port" "$dir")
     done
-    choice=$(kdialog --title "Aider" --menu "Sessões em execução — reabrir ou criar:" "${args[@]}" nova "Nova sessão…")
+    choice=$(kdialog --title "Aider" --menu "Sessões em execução — reabrir, criar ou encerrar:" "${args[@]}" nova "Nova sessão…" encerrar "Encerrar sessão…")
     [ -z "$choice" ] && exit 0
+    if [ "$choice" = "encerrar" ]; then
+        encerrar_sessoes
+        exit $?
+    fi
     if [ "$choice" != "nova" ]; then
-        xdg-open "http://localhost:$choice" >/dev/null 2>&1 &
+        abrir_gui "http://localhost:$choice"
         exit 0
     fi
 fi
 
 # ---- nova sessão ----
-ask_key || exit 0
-
 start_dir="$HOME"
 [ -f "$LASTDIR_FILE" ] && start_dir=$(<"$LASTDIR_FILE")
 [ -d "$start_dir" ] || start_dir="$HOME"
@@ -103,13 +156,70 @@ dir=$(kdialog --title "Aider — Escolha a pasta do projeto" --getexistingdirect
 if [ ! -d "$dir/.git" ]; then
     kdialog --title "Aider" --yesno "A pasta escolhida não é um repositório git (necessário para o aider).\n\nInicializar o git em:\n$dir ?" || exit 0
     git init -q "$dir" || { kdialog --title "Aider" --error "Falha ao inicializar o git na pasta."; exit 1; }
-    # prepara os arquivos para o git enxergá-los (repositório novo não lista nada)
-    git -C "$dir" add -A 2>/dev/null
 fi
 
+# Sincroniza o Git local para evitar o erro de 0 arquivos do Streamlit
+cd "$dir" || exit 1
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    git add -A 2>/dev/null
+    git config user.name "KDu9 Developer" 2>/dev/null
+    git config user.email "dev@kdu9.org" 2>/dev/null
+    git commit -m "KDu9: Sincronização automática de arquivos para IA" --allow-empty 2>/dev/null
+fi
+
+if [ $(git rev-list --all --count 2>/dev/null || echo 0) -eq 0 ]; then
+    git commit --allow-empty -m "KDu9: Inicialização estável" 2>/dev/null
+fi
+
+# ---- GERENCIAMENTO DE MULTI-CHAVE POR PROJETO (YAD) ----
+LOCAL_KEY_FILE="$dir/.aider.key"
+CURRENT_PROJECT_KEY=""
+
+if [ -f "$LOCAL_KEY_FILE" ]; then
+    CURRENT_PROJECT_KEY=$(<"$LOCAL_KEY_FILE")
+fi
+
+if [ -z "$CURRENT_PROJECT_KEY" ]; then
+    TELA_CHAVE=$(yad --form \
+        --title="KDu9 IA - Configuração de Sessão Dedicada" \
+        --window-icon="dialog-warning" \
+        --width=520 \
+        --text="<b><big>Nova Sessão de IA para este Projeto</big></b>\n\nIdentifique esta sessão e insira a chave do desenvolvedor responsável.\nCada projeto pode rodar com uma chave diferente para evitar o Rate Limit.\n\n1. Gere a chave no perfil desejado:\n   <a href='https://google.com'><b>👉 Abrir o Google AI Studio</b></a>\n2. Cole os dados abaixo:" \
+        --field="Identificação/E-mail (Ex: antonio@gmail.com):TEXT" "" \
+        --field="Chave API Gemini do Desenvolvedor:TEXT" "" \
+        --button="Cancelar:1" \
+        --button="Ativar Projeto:0" \
+        --center)
+
+    if [ $? -ne 0 ]; then
+        exit 0
+    fi
+
+    RESPONSAVEL=$(echo "$TELA_CHAVE" | awk -F'|' '{print $1}' | xargs)
+    USER_KEY=$(echo "$TELA_CHAVE" | awk -F'|' '{print $2}' | xargs)
+
+    if [ -z "$USER_KEY" ]; then
+        yad --error --title="KDu9 IA" --text="A chave é obrigatória para iniciar este projeto." --width=300 --center
+        exit 1
+    fi
+
+    echo "$USER_KEY" > "$LOCAL_KEY_FILE"
+    chmod 600 "$LOCAL_KEY_FILE"
+
+    if [ -f "$dir/.gitignore" ]; then
+        if ! grep -q ".aider.key" "$dir/.gitignore"; then
+            echo -e "\n.aider.key" >> "$dir/.gitignore"
+        fi
+    else
+        echo ".aider.key" > "$dir/.gitignore"
+    fi
+    CURRENT_PROJECT_KEY="$USER_KEY"
+fi
+
+# ---- INICIALIZAÇÃO DO SERVIDOR ----
 port=$(free_port)
 if [ -z "$port" ]; then
-    kdialog --title "Aider" --error "Já existem $MAX_SESS sessões do aider rodando. Encerre alguma com o ícone 'Aider — Parar servidor'."
+    kdialog --title "Aider" --error "Já existem $MAX_SESS sessions do aider rodando. Encerre alguma com o ícone 'Aider — Parar servidor'."
     exit 1
 fi
 
@@ -117,21 +227,72 @@ printf '%s' "$dir" > "$LASTDIR_FILE"
 printf '%s' "$dir" > "$CACHE_DIR/$port"
 LOG_FILE="$CACHE_DIR/$port.log"
 
-# sobe o servidor em segundo plano, em porta própria e sem abrir navegador
-# (a aba é aberta pelo próprio lançador quando o servidor responde)
-cd "$dir" || exit 1
-setsid nohup env "STREAMLIT_SERVER_PORT=$port" STREAMLIT_SERVER_HEADLESS=true \
-    "$AIDER" --browser >"$LOG_FILE" 2>&1 </dev/null &
+# A chave do projeto alimenta o aider; se o ambiente já trouxer uma
+# (override manual do usuário), ela tem prioridade.
+if [ -z "$GEMINI_API_KEY" ]; then
+    export GEMINI_API_KEY="$CURRENT_PROJECT_KEY"
+fi
+export STREAMLIT_SERVER_PORT="$port"
+export STREAMLIT_SERVER_HEADLESS=true
+
+if [ -z "$AIDER" ]; then
+    kdialog --title "Aider KDu9" --error "O executável do Aider não foi encontrado no sistema operacional."
+    exit 1
+fi
+
+setsid nohup "$AIDER" --browser --model gemini/gemini-3.6-flash --map-tokens 1024 >"$LOG_FILE" 2>&1 </dev/null &
+AIDER_PID=$!
 disown
 
-for i in $(seq 1 40); do
-    sleep 1
+for i in $(seq 1 60); do
+    sleep 0.5
     if healthy "$port"; then
-        xdg-open "http://localhost:$port" >/dev/null 2>&1 &
+        abrir_gui "http://localhost:$port"
         exit 0
     fi
 done
 
-rm -f "$CACHE_DIR/$port" "$LOG_FILE"
-kdialog --title "Aider" --error "O servidor do aider não subiu.\nVeja o log em:\n$LOG_FILE"
+# A sessão nunca ficou disponível: encerra somente este processo recém-criado
+# (e o pip que ele possa ter disparado) para não vazar porta nem deixar órfão.
+# Sessões já em funcionamento NÃO são afetadas — o multi-sessão continua intacto.
+kill -- -"$AIDER_PID" 2>/dev/null
+kill "$AIDER_PID" 2>/dev/null
+rm -f "$CACHE_DIR/$port"
+
+# ---- DIAGNÓSTICO REAL: lê o log da tentativa e explica o que fazer ----
+if grep -qiE "errno 13|permiss|install failed|browser feature|this command manually" "$LOG_FILE" 2>/dev/null; then
+    DIAG="O modo navegador do aider não está instalado neste computador.
+O aider tentou instalar sozinho e foi bloqueado por permissão de administrador.
+
+O que fazer — execute uma vez no terminal:
+    sudo /opt/pipx/venvs/aider-chat/bin/python -m pip install 'aider-chat[browser]'
+
+(Obs.: este problema NÃO é da chave API.)"
+elif grep -qiE "429|resource_exhausted|rate.?limit|quota" "$LOG_FILE" 2>/dev/null; then
+    DIAG="O Google bloqueou temporariamente o uso (limite da conta grátis / excesso de velocidade).
+
+O que fazer: aguarde alguns minutos e tente novamente."
+elif grep -qiE "401|403|unauthenticated|api.?key" "$LOG_FILE" 2>/dev/null; then
+    DIAG="A chave API Gemini pode estar incorreta ou revogada.
+
+O que fazer — apague o arquivo da chave deste projeto e execute o Aider
+novamente para digitar a nova chave:
+    rm \"$dir/.aider.key\""
+elif grep -qiE "already in use" "$LOG_FILE" 2>/dev/null; then
+    DIAG="A porta $port já estava ocupada por outro programa.
+
+O que fazer: tente novamente; se persistir, reinicie o computador para liberar as portas."
+else
+    DIAG="O assistente de IA não conseguiu iniciar (causa não identificada).
+
+O que fazer: analise o log completo desta tentativa (caminho abaixo)."
+fi
+
+if kdialog --title "Aider KDu9" --yesno "$DIAG
+
+Log completo da tentativa: $LOG_FILE
+
+Abrir o log agora?" --yes-label "Abrir o log" --no-label "Fechar"; then
+    kdialog --title "Log da tentativa — porta $port" --textbox "$LOG_FILE" 900 550
+fi
 exit 1

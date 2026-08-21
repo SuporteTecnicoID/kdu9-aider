@@ -2,3 +2,4 @@ dist/
 *.log
 
 .aider.key
+.aider*

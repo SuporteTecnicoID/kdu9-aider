@@ -12,10 +12,15 @@ com um clique.
 - Instalação e atualização com **um clique duplo** (`instalar.sh`) — sem root;
 - Ícone **Aider**: abre a interface no navegador, sem terminal aberto;
 - **Várias sessões independentes** (até 8), cada uma com sua pasta de projeto;
-- Menu de sessões: reabrir a aba de uma sessão viva ou criar nova;
+- Menu de sessões: reabrir, criar nova ou **encerrar só as que você escolher**;
 - Ícone **Aider — Parar servidor**: encerra todas as sessões;
-- No primeiro uso, **pede a chave do Gemini** numa janela e guarda com
-  permissão restrita (`~/.env`, modo 600);
+- Abre o navegador em **janela privativa** — sem histórico, sem abas mortas de
+  sessões antigas e sem cache velho do Streamlit após atualizações;
+- Chave do Gemini **por projeto** (`.aider.key` na pasta do projeto, modo 600 e
+  fora do git) — cada projeto pode usar uma chave diferente para dividir o
+  limite da conta grátis;
+- Sessão não subiu? O aviso mostra a **causa real** (lida do log da tentativa)
+  e o que fazer — não culpa a chave à toa;
 - Pasta que não é repositório git? O instalador de sessão inicializa o git
   e prepara os arquivos automaticamente para o aider enxergá-los;
 - Reinstalar/atualizar é seguro: **nunca sobrescreve** `~/.env` nem
@@ -24,8 +29,8 @@ com um clique.
 ## Requisitos
 
 - GNU/Linux com KDE (testado no KDu9 / Plasma);
-- `python3` 3.10+ com `python3-venv`, `git`, `curl`, `kdialog`, `xdg-open`
-  (no KDu9/Debian/Ubuntu: `sudo apt install python3-venv git curl kdialog xdg-utils`);
+- `python3` 3.10+ com `python3-venv`, `git`, `curl`, `kdialog`, `yad`, `xdg-open`
+  (no KDu9/Debian/Ubuntu: `sudo apt install python3-venv git curl kdialog yad xdg-utils`);
 - Internet na primeira instalação (baixa o aider-chat do PyPI);
 - Chave grátis da API do Gemini: <https://aistudio.google.com/apikey>.
 
@@ -62,7 +67,8 @@ O instalador entende esse padrão automaticamente:
 - **Já existe `/opt/pipx` com aider?** → reusa, sem baixar nada, e nenhum
   usuário ganha ~1 GB no home;
 - **Rodando como root** (build da distro/skel) → instala direto em
-  `/opt/pipx`;
+  `/opt/pipx/venvs/aider-chat` (mesmo layout do pipx) e cria o link
+  `/usr/local/bin/aider`;
 - **Usuário comum sem `/opt/pipx`** → instala em `~/.aider-env` (funciona
   sem root em qualquer distro).
 
@@ -92,8 +98,8 @@ Layout resultante:
 
 | Caminho | O quê |
 |---|---|
-| `/opt/pipx` | ambiente do aider (~1 GB, global, fora do skel) |
-| `/usr/local/bin/aider-gui`, `aider-stop` | lançadores (valem para todos) |
+| `/opt/pipx/venvs/aider-chat` | ambiente do aider (~1 GB, global, fora do skel) |
+| `/usr/local/bin/aider` (link), `aider-gui`, `aider-stop` | lançadores (valem para todos) |
 | `/usr/share/pixmaps/aider.png` | ícone global |
 | `/usr/share/applications/aider*.desktop` | menu para todos os usuários |
 | `/etc/skel/Desktop/aider*.desktop` | atalhos prontos para novos usuários |
@@ -111,11 +117,13 @@ Destinos personalizáveis para testes: `KDU9_GLOBAL_BIN`,
 ## Primeiro uso
 
 1. Clique no ícone **Aider**;
-2. Na primeira vez, ele pede a chave do Gemini (cole e confirme);
+2. Na primeira vez de cada projeto, ele pede a chave do Gemini (cole e
+   confirme);
 3. Escolha a pasta do projeto e converse! A interface abre no navegador.
 
-Para trocar o modelo padrão, edite `~/.aider.conf.yml` (ex.:
-`model: gemini/gemini-3.6-pro`).
+O lançador usa `gemini/gemini-3.6-flash` com `--map-tokens 1024` — mapa do
+repositório enxuto, economiza a cota da conta grátis. Para trocar, edite a
+linha do `--model` em `src/aider-gui` e reinstale.
 
 ## Desinstalação
 
@@ -149,6 +157,7 @@ kdu9-aider/
 
 | Versão | Data       | Novidades |
 |--------|------------|-----------|
+| 1.2.0  | 2026-08-21 | Modo navegador garantido também em instalações reusadas (`ensure_browser`); layout pipx `/opt/pipx/venvs/aider-chat` + link `/usr/local/bin/aider`; janela privativa do navegador; encerramento seletivo de sessões no menu; diagnóstico real de falhas (lê o log e diz o que fazer); cache do pip limpo após instalar. |
 | 1.1.0  | 2026-08-20 | Modo `--skel` para builds da distro (global em /opt/pipx + lançadores de caminho fixo + esqueleto pronto). |
 | 1.0.0  | 2026-08-20 | Versão inicial: instalação por clique, sessões múltiplas, pedido de chave no 1º uso. |
 

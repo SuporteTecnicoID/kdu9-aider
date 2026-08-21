@@ -41,7 +41,7 @@ banner() {
 check_deps() {
     local missing=0
 
-    for cmd in python3 git curl kdialog xdg-open; do
+    for cmd in python3 git curl kdialog yad xdg-open; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             err "Comando '$cmd' não encontrado. Instale-o antes (ex.: sudo apt install $cmd)."
             missing=1
@@ -55,7 +55,7 @@ check_deps() {
         exit 1
     fi
 
-    ok "Dependências encontradas (python3, git, curl, kdialog, xdg-open)."
+    ok "Dependências encontradas (python3, git, curl, kdialog, yad, xdg-open)."
 }
 
 # ---------- ambiente virtual + aider ----------
@@ -73,20 +73,42 @@ shared_aider_bin() {
     return 1
 }
 
+# Garante o extra de navegador (streamlit) numa instalação que já existe —
+# sem isto, um ambiente reusado sem o extra faz o Aider tentar instalar
+# sozinho em runtime e falhar por permissão (raiz do bug da interface).
+ensure_browser() {
+    local py sudo_cmd=""
+    py="${AIDER_BIN%/*}/python"
+    [ -x "$py" ] || return 0
+    if "$py" -c "import streamlit" >/dev/null 2>&1; then
+        ok "Modo navegador (streamlit) presente."
+        return 0
+    fi
+    warn "Modo navegador ausente — instalando o extra [browser]..."
+    if [ "$(id -u)" -ne 0 ] && [ ! -w "$py" ]; then sudo_cmd="sudo"; fi
+    if ! $sudo_cmd "$py" -m pip install --upgrade --upgrade-strategy only-if-needed 'aider-chat[browser]' >>"$LOG" 2>&1; then
+        err "Falha ao instalar o modo navegador (veja $LOG)."
+        exit 1
+    fi
+    $sudo_cmd "$py" -m pip cache purge >>"$LOG" 2>&1 || true
+    ok "Modo navegador instalado (cache do pip limpo)."
+}
+
 install_venv() {
     local sudo_cmd=""
 
     # 1) instalação compartilhada do sistema já existe → reusa (economiza ~1 GB por usuário)
     if [ -z "${KDU9_AIDER_VENV:-}" ] && AIDER_BIN="$(shared_aider_bin)"; then
         ok "Reusando instalação compartilhada do sistema: $AIDER_BIN"
+        ensure_browser
         return 0
     fi
 
     # 2) destino do ambiente: explícito > root (build da distro/skel) > usuário
     if [ -z "${KDU9_AIDER_VENV:-}" ]; then
         if [ "$(id -u)" -eq 0 ]; then
-            VENV_DIR="$SHARED_ROOT"
-            say "  Modo root: instalando compartilhado em $VENV_DIR (padrão KDu9, fora do skel)."
+            VENV_DIR="$SHARED_ROOT/venvs/aider-chat"
+            say "  Modo root: instalando compartilhado em $VENV_DIR (layout pipx do KDu9, fora do skel)."
         else
             VENV_DIR="$HOME/.aider-env"
         fi
@@ -95,6 +117,7 @@ install_venv() {
     if [ -x "$VENV_DIR/bin/aider" ] && "$VENV_DIR/bin/aider" --version >/dev/null 2>&1; then
         AIDER_BIN="$VENV_DIR/bin/aider"
         ok "Aider já instalado no ambiente virtual ($VENV_DIR) — reaproveitando."
+        ensure_browser
         return 0
     fi
 
@@ -123,9 +146,11 @@ install_venv() {
     $sudo_cmd python3 -m venv "$VENV_DIR" >>"$LOG" 2>&1 || { err "Falha ao criar o ambiente virtual (veja $LOG)"; exit 1; }
 
     say "  Baixando e instalando o aider-chat (pode demorar alguns minutos)..."
-    $sudo_cmd "$VENV_DIR/bin/pip" install --upgrade pip >>"$LOG" 2>&1
-    $sudo_cmd "$VENV_DIR/bin/pip" install --upgrade 'aider-chat[browser]' >>"$LOG" 2>&1 \
+    $sudo_cmd "$VENV_DIR/bin/python" -m pip install --upgrade pip >>"$LOG" 2>&1
+    $sudo_cmd "$VENV_DIR/bin/python" -m pip install --upgrade 'aider-chat[browser]' >>"$LOG" 2>&1 \
         || { err "Falha ao instalar o aider (veja $LOG). Verifique sua conexão com a internet."; exit 1; }
+    # limpa o cache de wheels (~200 MB) — sobra que não precisa ir para a ISO/disco
+    $sudo_cmd "$VENV_DIR/bin/python" -m pip cache purge >>"$LOG" 2>&1 || true
 
     AIDER_BIN="$VENV_DIR/bin/aider"
     ok "Aider $("$AIDER_BIN" --version 2>/dev/null || echo '') instalado em $VENV_DIR."
@@ -200,7 +225,8 @@ summary() {
     say "      (grátis em aistudio.google.com/apikey)."
     say "   3. Escolha a pasta do projeto e bons códigos!"
     say ""
-    say " Ícone \033[1mAider — Parar servidor\033[0m encerra todas as sessões."
+    say " Ícone \033[1mAider — Parar servidor\033[0m encerra todas as sessões;"
+    say " no menu do Aider também dá para encerrar só as que você escolher."
     say " Várias sessões independentes: clique de novo no ícone Aider."
     say ""
     say " Log da instalação: $LOG"
@@ -209,8 +235,8 @@ summary() {
 
 # ---------- modo skel (build da distro: tudo global + esqueleto) ----------
 # Layout resultante:
-#   /opt/pipx (ou $SHARED_ROOT)               — ambiente do aider (~1 GB, global)
-#   /usr/local/bin/aider-gui, aider-stop      — lançadores (valem p/ todos)
+#   /opt/pipx/venvs/aider-chat (ou $SHARED_ROOT) — ambiente do aider (~1 GB, global)
+#   /usr/local/bin/aider (link), aider-gui, aider-stop — lançadores (valem p/ todos)
 #   /usr/share/pixmaps/aider.png              — ícone global
 #   /usr/share/applications/aider*.desktop    — menu para todos os usuários
 #   $SKEL_DIR/Desktop/aider*.desktop          — atalhos dos novos usuários
@@ -237,6 +263,8 @@ skel_mode() {
     install -m 755 "$SRC/aider-gui"  "$gbin/aider-gui"
     install -m 755 "$SRC/aider-stop" "$gbin/aider-stop"
     install -m 644 "$SRC/aider.png"  "$gpix/aider.png"
+    # aider no PATH global (mesmo layout de link do pipx usado no sistema do laboratório)
+    [ -n "$AIDER_BIN" ] && ln -sf "$AIDER_BIN" "$gbin/aider"
     ok "Lançadores globais em $gbin e ícone em $gpix."
 
     # menu do sistema: caminhos fixos, iguais para todos os usuários
